@@ -1,10 +1,176 @@
+/**
+ * @description get date of each Monday
+ * @param diff 
+ * @returns date
+ */
+function getMonday(diff) {
+  var now = new Date();
+  var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  var day = today.getDay();
+  if (day == 0) {
+    day = 7;
+  }
+  var monday = new Date(today.setDate(today.getDate() - day + diff));
+  return monday;
+}
+
+/**
+ * @description Detect current crew based on date
+ * @param now 
+ * @returns string (A_C or B_D)
+ */
+function detectCrew(now) {
+  var first = new Date(now.getFullYear(), 0, 1);
+  var weekNo = Math.ceil((((now - first) / 86400000) + first.getDay() + 1) / 7);
+  if (now.getDay() == 0) {
+    weekNo = weekNo - 1;
+  }
+  if (weekNo % 2 == 0) {
+    return "A_C";
+  } else {
+    return "B_D";
+  }
+}
+
+/**
+ * @description Get the current week or next week 
+ * @param diff 
+ * @returns array
+ */
+function getWeek(diff) {
+  var curr = new Date();
+  var day = curr.getDay();
+  if (day == 0) {
+    day = 7;
+  }
+  var first = curr.getDate() - day + diff;
+  var week = [];
+  for (var i = 0; i < 7; i++) {
+    var next = new Date(curr.getTime());
+    next.setDate(first + i);
+    next.setHours(0, 0, 0, 0);
+    week.push(next);
+  }
+  return week;
+}
+
+/**
+ * @description get data of A_C crew from sheet
+ * @returns sheet
+ */
+function getDataA_C() {
+  return SpreadsheetApp
+    .openById('1-HmBSO0ViOWjC4ttaAxOZ1sygnfWmKvMJBswBRyouQA')
+    .getSheetByName('Internal Dashboard A/C')
+    .getRange(1, 1, 137, 14)
+    .getValues();
+}
+
+/**
+ * @description get data of B_D crew from sheet
+ * @returns sheet
+ */
+function getDataB_D() {
+  return SpreadsheetApp
+    .openById('1-HmBSO0ViOWjC4ttaAxOZ1sygnfWmKvMJBswBRyouQA')
+    .getSheetByName('Internal Dashboard B/D')
+    .getRange(1, 1, 137, 14)
+    .getValues();
+}
+/**
+ * @description Get maximum length of all columns
+ * @param data 
+ * @param ref 
+ */
+function getMaxLength(data, ref) {
+  var row;
+  var maxLength;
+  switch (ref) {
+    case 'rollFirst':
+      row = 8;
+      break;
+    case 'rollSecond':
+      row = 27;
+      break;
+    case 'inFirst':
+      row = 51;
+      break;
+    case 'inSecond':
+      row = 65;
+      break;
+    case 'ecoFirst':
+      row = 84;
+      break;
+    case 'ecoSecond':
+      row = 96;
+      break;
+    case 'northFirst':
+      row = 113;
+      break;
+    case 'northSecond':
+      row = 126;
+      break;
+  }
+  maxLength = Math.max(data[row-1][1], data[row-1][3], data[row-1][5], data[row-1][7], data[row-1][9], data[row-1][11], data[row-1][13]);
+  return [row, maxLength];
+}
+
+/**
+ * @description make table-view historical data from Internal Dashboard sheet
+ * @param data 
+ * @param ref 
+ */
+function makeTableFromInternal(data, ref) {
+  // get maxLength
+  var row_length = getMaxLength(data, ref);
+  var rowNum = row_length[0];
+  var maxLength = row_length[1];
+  
+  // define table maxLength * 7
+  var table = [];
+  for (var i = 0; i < maxLength; i++) {
+    table[i] = [];
+  }
+  // insert data from sheet to table
+  for (var i = 0; i < maxLength; i++) {
+    for (var j = 0; j < 7; j++) {
+      if (data[i+rowNum][2*j+1] && data[i+rowNum][2*j+1] != '-') {
+        table[i][j] = data[i+rowNum][2*j+1];
+      } else {
+        table[i][j] = null;
+      }
+    }
+  }
+  // remove null in table
+  var columns = [];
+  for (var i = 0; i < 7; i++) {
+    columns[i] = [];
+    for (j = 0; j < table.length; j++) {
+      if (table[j][i]) columns[i].push(table[j][i]);
+    }
+  }
+  var new_table = [];
+  for (var i = 0; i < table.length; i++) {
+    new_table[i] = [];
+    for (j = 0; j < 7; j++) {
+      if (columns[j][i]) new_table[i][j] = columns[j][i];
+      else new_table[i][j] = null;
+    }
+  }
+  return new_table;
+}
+
+/**
+ * @description Main Function
+ * @returns It will download historical data from company shedule sheet to another sheet
+ */
 function downloadData() {
   var spreadsheetId = '1AvHhKOEsYRUHWqsG6-k8_C-NQ8rcaIqdAbkwnBAoxfg'; // spreadsheet ID
-  var sheetName = Utilities.formatDate(firstOfWeek(1), "CST", "MM/dd/YY")
+  var sheetName = Utilities.formatDate(getMonday(1), "CST", "MM/dd/YY"); // Create Sheet Name as Monday-Date
   var activeSpreadsheet = SpreadsheetApp.openById(spreadsheetId);
   var newSheet = activeSpreadsheet.getSheetByName(sheetName);
 
-  var crew = detectCrew(new Date());
+  var crew = detectCrew(new Date()); // Detect Current Crew based on date
   var week = getWeek(1);
   var days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   var dates = [];
@@ -52,6 +218,7 @@ function downloadData() {
   var northSecondHeader = [];
   northSecondHeader.push(northSecondHead);
 
+  // Fill Out historical data into new sheet
   if (newSheet == null) {
     newSheet = activeSpreadsheet.insertSheet();
     newSheet.setName(sheetName);
